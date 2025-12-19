@@ -18,6 +18,7 @@ class Order {
 // App state
 let appState = {
     orders: null,
+    adjacencyMatrix: null, 
     graph: null,
     coloring: null,
     currentStep: 0,

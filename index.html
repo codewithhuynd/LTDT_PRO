@@ -46,9 +46,12 @@
             </div>
 
             <div class="simulation-controls" id="simControls">
-                <button class="control-btn" id="playBtn">▶️ Play</button>
-                <button class="control-btn" id="pauseBtn" disabled>⏸️ Pause</button>
-                <button class="control-btn" id="nextBtn">⏭️ Next</button>
+                <div id="stepStatus" style="display:none; align-items: center; margin-right: 15px; padding-right: 15px; border-right: 1px solid #ccc;">
+                    <span id="stepCount" style="font-weight: bold; margin-right: 8px; color: #333;">B0</span>
+                    <div id="stepColorBox" style="width: 24px; height: 24px; background: #ccc; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.3); border-radius: 4px;" title="Màu đang xét"></div>
+            </div>
+                <button class="control-btn" id="nextBtn">▶️ NEXT (Xét đỉnh)</button>
+                <button class="control-btn" id="skipBtn">⏩ SKIP (Xong lượt màu)</button>
             </div>
         </div>
 

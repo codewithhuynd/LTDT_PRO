@@ -9,9 +9,11 @@ const runColoringBtn = document.getElementById('runColoringBtn');
 const stepByStepBtn = document.getElementById('stepByStepBtn');
 const exportBtn = document.getElementById('exportBtn');
 const simControls = document.getElementById('simControls');
-const playBtn = document.getElementById('playBtn');
-const pauseBtn = document.getElementById('pauseBtn');
 const nextBtn = document.getElementById('nextBtn');
+const skipBtn = document.getElementById('skipBtn');
+const stepStatus = document.getElementById('stepStatus');
+const stepCount = document.getElementById('stepCount');
+const stepColorBox = document.getElementById('stepColorBox');
 const tabButtons = document.querySelectorAll('.tab-btn');
 const orderTooltip = document.getElementById("orderTooltip");
 
@@ -509,17 +511,17 @@ function renderGraph(graph) {
             "link",
             d3.forceLink(links)
                 .distance(400)
-                .strength(0.8)
+                .strength(0.5)
         )
         .force(
             "charge",
             d3.forceManyBody()
-                .strength(d => d.isIsolated ? -60 : -30)
+                .strength(d => d.isIsolated ? -60 : -10)
         )
         .force(
             "collision",
             d3.forceCollide()
-                .radius(30)
+                .radius(150)
                 .strength(1)
         )
         .force(
@@ -529,7 +531,7 @@ function renderGraph(graph) {
         .force(
             "isolateRing",
             d3.forceRadial(
-                d => d.isIsolated ? 220 : 0,
+                d => d.isIsolated ? 350 : 0,
                 width / 2,
                 height / 2
             ).strength(d => d.isIsolated ? 0.4 : 0)
@@ -616,6 +618,35 @@ function showOrderTooltip(event, order) {
     orderTooltip.style.display = "block";
 }
 
+// =====================================================
+// 1️⃣1️⃣ HÀM PHỤ TRỢ: TẠO MA TRẬN KỀ TỪ DANH SÁCH XUNG ĐỘT
+// (Thêm đoạn này vào trước phần xử lý sự kiện nút Build Graph)
+// =====================================================
+function createAdjacencyMatrix(orders, conflictList) {
+    const n = orders.length;
+    // Tạo ma trận n x n toàn số 0
+    const matrix = Array.from({ length: n }, () => Array(n).fill(0));
+
+    // Tạo bảng tra cứu: ID đơn hàng -> Số thứ tự (Index) trong mảng
+    // Mục đích: Để biết đơn hàng ID "DH001" nằm ở hàng thứ mấy trong ma trận
+    const idToIndex = new Map();
+    orders.forEach((order, index) => {
+        idToIndex.set(order.id, index);
+    });
+
+    // Duyệt qua danh sách xung đột để đánh dấu số 1 vào ma trận
+    conflictList.forEach(c => {
+        const indexA = idToIndex.get(c.orderA.id);
+        const indexB = idToIndex.get(c.orderB.id);
+
+        if (indexA !== undefined && indexB !== undefined) {
+            matrix[indexA][indexB] = 1;
+            matrix[indexB][indexA] = 1; // Đồ thị vô hướng (A xung đột B thì B cũng xung đột A)
+        }
+    });
+
+    return matrix;
+}
 
 buildGraphBtn.addEventListener('click', () => {
     if (!appState.orders || appState.orders.length === 0) {
@@ -629,15 +660,23 @@ buildGraphBtn.addEventListener('click', () => {
             <p>Đang xây dựng đồ thị xung đột...</p>
         </div>`;
 
+    // 1. Tính toán danh sách xung đột (Code cũ đã có)
     const conflicts = calculateConflicts(appState.orders);
 
+    // 2. [THÊM MỚI] Tạo ma trận kề từ danh sách xung đột vừa tính được
+    const matrix = createAdjacencyMatrix(appState.orders, conflicts); // <--- GỌI HÀM MỚI
+    appState.adjacencyMatrix = matrix; // <--- LƯU VÀO APPSTATE
+
+    // 3. Lưu dữ liệu để vẽ (Code cũ)
     appState.graph = {
         nodes: appState.orders,
         edges: conflicts
     };
 
+    // 4. Vẽ đồ thị (Code cũ)
     setTimeout(() => renderGraph(appState.graph), 80);
 
+    // 5. Hiển thị thông báo (Code cũ)
     conflictsPanel.innerHTML = conflicts.length === 0
         ? `<div class="empty-state">Không có xung đột</div>`
         : conflicts.map((c, i) => `
@@ -654,75 +693,9 @@ buildGraphBtn.addEventListener('click', () => {
                 ⏱️ ${c.travelMinutes} phút (Δ nhóm = ${c.groupDiff})
             </div>
         `).join('');
-});
-
-
-// Run Coloring
-runColoringBtn.addEventListener('click', () => {
-    if (!appState.orders || appState.orders.length === 0 || !appState.graph) {
-        alert('Vui lòng xây dựng đồ thị trước khi chạy thuật toán tô màu.');
-        return;
-    }
-
-    console.log('Running coloring algorithm...');
-    vizCanvas.innerHTML = '<div class="viz-placeholder"><div style="font-size: 4rem;">🎨</div><p>Đang chạy thuật toán Welsh-Powell...</p></div>';
-
-    // Giả lập xử lý
-    setTimeout(() => {
-        vizCanvas.innerHTML = '<div class="viz-placeholder"><div style="font-size: 4rem;">🎉</div><p>Thuật toán hoàn thành!</p></div>';
-
-        // Show results (Giả lập)
-        resultsPanel.innerHTML = `
-            <div class="result-item"><strong>Số màu tối thiểu:</strong> 3</div>
-            <div class="result-item"><strong>Số xe cần thiết:</strong> 3 xe</div>
-            <div class="result-item"><strong>Hiệu suất:</strong> 87%</div>
-        `;
-
-        // Show details (Giả lập)
-        detailsPanel.innerHTML = `
-            <div class="detail-item"><strong>Xe 1 (Màu Đỏ):</strong> #A1, #B3, #C2</div>
-            <div class="detail-item"><strong>Xe 2 (Màu Xanh):</strong> #A2, #C1, #D4</div>
-            <div class="detail-item"><strong>Xe 3 (Màu Vàng):</strong> #A3, #B1, #C3</div>
-        `;
-    }, 2000);
-});
-
-// Step-by-Step Mode
-stepByStepBtn.addEventListener('click', () => {
-    appState.isStepMode = !appState.isStepMode;
-    simControls.classList.toggle('active');
-    stepByStepBtn.textContent = appState.isStepMode ? '⏸️ Exit Step Mode' : '⏯️ Step-by-Step';
-
-    if (appState.isStepMode) {
-        playBtn.disabled = false;
-        nextBtn.disabled = false;
-    } else {
-        playBtn.disabled = true;
-        pauseBtn.disabled = true;
-        nextBtn.disabled = true;
-    }
-});
-
-// Play button, Pause button, Next button, Export button, Tab switching
-// (Giữ nguyên logic mô phỏng đã có)
-
-playBtn.addEventListener('click', () => {
-    appState.isPlaying = true;
-    playBtn.disabled = true;
-    pauseBtn.disabled = false;
-    console.log('Playing animation...');
-});
-
-pauseBtn.addEventListener('click', () => {
-    appState.isPlaying = false;
-    playBtn.disabled = false;
-    pauseBtn.disabled = true;
-    console.log('Paused');
-});
-
-nextBtn.addEventListener('click', () => {
-    appState.currentStep++;
-    console.log('Next step:', appState.currentStep);
+        
+    // [THÊM MỚI] Log ra kiểm tra chơi (F12) xem có ma trận chưa
+    console.log("Ma trận kề đã tạo:", appState.adjacencyMatrix);
 });
 
 exportBtn.addEventListener('click', () => {
@@ -742,3 +715,418 @@ tabButtons.forEach(btn => {
 });
 
 console.log('ShipColor Dashboard initialized');
+
+/* ==========================================================================
+   PHẦN BỔ SUNG MỚI: THUẬT TOÁN WELSH-POWELL & RUN COLORING
+   (Dán tiếp vào cuối file main.js)
+   ========================================================================== */
+
+// 1. BẢNG MÀU (Dùng để tô cho các xe khác nhau)
+const COLOR_PALETTE = [
+    { bg: '#FF5722', border: '#BF360C', name: 'Xe 1 (Đỏ)' },
+    { bg: '#FFC107', border: '#FF6F00', name: 'Xe 2 (Vàng)' },
+    { bg: '#4CAF50', border: '#1B5E20', name: 'Xe 3 (Xanh lá)' },
+    { bg: '#2196F3', border: '#0D47A1', name: 'Xe 4 (Xanh dương)' },
+    { bg: '#9C27B0', border: '#4A148C', name: 'Xe 5 (Tím)' },
+    { bg: '#00BCD4', border: '#006064', name: 'Xe 6 (Cyan)' },
+    { bg: '#795548', border: '#3E2723', name: 'Xe 7 (Nâu)' },
+    { bg: '#607D8B', border: '#263238', name: 'Xe 8 (Xám)' }
+];
+
+// 2. THUẬT TOÁN WELSH-POWELL (CORE LOGIC)
+function welshPowellAlgorithm(matrix) {
+    const numVertices = matrix.length;
+    
+    // Bước 1: Tính bậc (degree) của từng đỉnh
+    let vertices = [];
+    for (let i = 0; i < numVertices; i++) {
+        let degree = 0;
+        for (let j = 0; j < numVertices; j++) {
+            if (matrix[i][j] === 1) degree++;
+        }
+        vertices.push({ id: i, degree: degree, color: null });
+    }
+
+    // Bước 2: Sắp xếp các đỉnh theo thứ tự bậc giảm dần
+    // (Theo lý thuyết: Chọn đỉnh bậc cao nhất tô trước)
+    vertices.sort((a, b) => b.degree - a.degree);
+
+    // Bước 3: Tô màu tham lam (Greedy Coloring)
+    let colorIndex = 0;
+    let coloredCount = 0;
+
+    // Lặp cho đến khi tất cả các đỉnh đều có màu
+    while (coloredCount < numVertices) {
+        // Lấy danh sách các đỉnh chưa được tô màu
+        let uncoloredNodes = vertices.filter(v => v.color === null);
+        if (uncoloredNodes.length === 0) break;
+
+        // Gán màu mới (colorIndex) cho đỉnh đầu tiên trong danh sách chưa tô (có bậc cao nhất)
+        let root = uncoloredNodes[0];
+        root.color = colorIndex;
+        coloredCount++;
+
+        // Tìm các đỉnh khác không kề với root và cũng không kề với các đỉnh đã tô màu này
+        // Danh sách các đỉnh đã tô màu hiện tại (trong lượt màu này)
+        let currentGroup = [root.id];
+
+        for (let i = 1; i < uncoloredNodes.length; i++) {
+            let candidate = uncoloredNodes[i];
+            
+            // Kiểm tra xem candidate có kề với bất kỳ đỉnh nào trong currentGroup không
+            let isAdjacent = false;
+            for (let nodeId of currentGroup) {
+                // Kiểm tra ma trận kề: matrix[candidate.id][nodeId]
+                if (matrix[candidate.id][nodeId] === 1) {
+                    isAdjacent = true;
+                    break;
+                }
+            }
+
+            // Nếu không kề với ai trong nhóm màu hiện tại -> Tô cùng màu
+            if (!isAdjacent) {
+                candidate.color = colorIndex;
+                currentGroup.push(candidate.id);
+                coloredCount++;
+            }
+        }
+
+        // Chuyển sang màu tiếp theo cho lượt sau
+        colorIndex++;
+    }
+
+    // Trả về kết quả: Danh sách đỉnh đã sắp xếp lại theo Index ban đầu để dễ map
+    return {
+        totalColors: colorIndex,
+        vertexColors: vertices.sort((a, b) => a.id - b.id) // Sort lại theo ID để map vào orders
+    };
+}
+
+
+    /* =====================================================
+   3️⃣ CẬP NHẬT MÀU LÊN ĐỒ THỊ D3.JS (ĐÃ FIX LỖI ID)
+   ===================================================== */
+function applyColorsToVisGraph(vertexColors) {
+    console.log("Đang cập nhật màu cho đồ thị D3...");
+
+    // 1. Cập nhật thuộc tính màu vào appState.orders để lưu trữ dữ liệu
+    vertexColors.forEach(v => {
+        // v.id ở đây chính là số thứ tự (index) trong mảng
+        if (appState.orders[v.id]) {
+            appState.orders[v.id].mauSac = v.color;
+        }
+    });
+
+    // 2. Chọn tất cả các vòng tròn (node) trong SVG
+    const circles = d3.select("#vizCanvas svg g").selectAll("circle");
+
+    if (circles.empty()) {
+        console.warn("⚠️ Không tìm thấy các node D3 để tô màu. Có thể đồ thị chưa được vẽ.");
+        return;
+    }
+
+    // 3. Thực hiện tô màu
+    circles.transition()
+        .duration(1000) // Hiệu ứng chuyển màu mượt mà trong 1 giây
+        .attr("fill", d => {
+            // LƯU Ý QUAN TRỌNG: 
+            // d._index là số thứ tự tôi đã gán lúc renderGraph (0, 1, 2...)
+            // v.id từ thuật toán cũng là số thứ tự (0, 1, 2...)
+            // => Phải so sánh d._index với v.id mới khớp nhau!
+            
+            const vertex = vertexColors.find(v => v.id === d._index);
+            
+            if (vertex) {
+                // Lấy màu từ bảng màu, dùng toán tử % để quay vòng nếu hết màu
+                const colorObj = COLOR_PALETTE[vertex.color % COLOR_PALETTE.length];
+                return colorObj.bg; 
+            }
+            return "#2f80ed"; // Màu gốc nếu không tìm thấy (Fallback)
+        })
+        .attr("stroke", d => {
+            const vertex = vertexColors.find(v => v.id === d._index);
+            if (vertex) {
+                const colorObj = COLOR_PALETTE[vertex.color % COLOR_PALETTE.length];
+                return colorObj.border; // Viền đậm hơn
+            }
+            return "#1c4fa1";
+        })
+        // Hiệu ứng phụ: Node nào tô xong thì to lên một chút để dễ nhìn
+        .attr("r", 25);
+        
+    console.log("✅ Đã tô màu xong các node trên đồ thị.");
+}
+
+/* ==========================================================================
+   SỰ KIỆN NÚT "RUN COLORING"
+   ========================================================================== */
+
+if (runColoringBtn) {
+    // Clone nút để xóa event cũ
+    const newBtn = runColoringBtn.cloneNode(true);
+    runColoringBtn.parentNode.replaceChild(newBtn, runColoringBtn);
+
+    newBtn.addEventListener('click', () => {
+        // 1. Kiểm tra điều kiện: Phải có Ma trận kề trong appState
+        if (!appState.adjacencyMatrix || !appState.orders) {
+            alert('⚠️ Vui lòng nhấn "Build Graph" trước để tạo ma trận kề!');
+            return;
+        }
+
+        console.log("--- Bắt đầu thuật toán Welsh-Powell ---");
+        const vizCanvas = document.getElementById('vizCanvas');
+        
+        // Hiển thị trạng thái đang chạy
+        // (Lưu ý: Không xóa đồ thị cũ, chỉ hiện thông báo đè lên hoặc loading nhỏ)
+        // Ở đây ta tính toán rất nhanh nên chạy luôn
+
+        try {
+            // 2. Chạy thuật toán
+            const result = welshPowellAlgorithm(appState.adjacencyMatrix);
+            
+            // Lưu kết quả vào appState
+            appState.coloring = result;
+            appState.hasColoring = true; // Mở khóa Map View (nếu có logic đó)
+
+            // 3. Cập nhật màu sắc lên đồ thị
+            applyColorsToVisGraph(result.vertexColors);
+
+            // 4. Hiển thị kết quả ra Panel
+            if (resultsPanel) {
+                resultsPanel.innerHTML = `
+                    <div class="result-item" style="border-left-color: #2196F3;">
+                        <strong>🎯 Kết quả tối ưu (Welsh-Powell):</strong><br>
+                        Số màu sử dụng (Số xe): <h2>${result.totalColors}</h2>
+                    </div>
+                `;
+            }
+
+            // 5. Hiển thị chi tiết phân bổ xe
+            if (detailsPanel) {
+                let html = '';
+                // Gom nhóm các đơn theo màu (xe)
+                for(let c = 0; c < result.totalColors; c++) {
+                    const group = result.vertexColors.filter(v => v.color === c);
+                    const palette = COLOR_PALETTE[c] || { name: `Xe ${c+1}`, bg: '#ddd' };
+                    
+                    // Lấy tên đơn hàng từ appState.orders dựa vào ID
+                    const orderNames = group.map(v => appState.orders[v.id].tenDonHang).join(', ');
+
+                    html += `
+                        <div class="detail-item" style="border-left: 5px solid ${palette.bg};">
+                            <strong>${palette.name}:</strong> (${group.length} đơn)<br>
+                            <small>${orderNames}</small>
+                        </div>
+                    `;
+                }
+                detailsPanel.innerHTML = html;
+            }
+
+            alert(`✅ Đã tô màu xong!\nSố xe cần thiết: ${result.totalColors}`);
+
+        } catch (err) {
+            console.error(err);
+            alert("Lỗi thuật toán: " + err.message);
+        }
+    });
+}
+
+// =====================================================
+// 🛠️ STEP-BY-STEP LOGIC (WELSH-POWELL)
+// =====================================================
+
+// Biến lưu trạng thái chạy từng bước
+let stepScenario = []; 
+let stepIndex = 0;
+let stepTimer = null;
+
+// 1️⃣ HÀM SINH KỊCH BẢN (SCRIPT WRITER)
+// Chạy ngầm thuật toán để ghi lại các bước sẽ diễn ra
+function generateWelshPowellSteps(matrix, orders) {
+    let steps = [];
+    
+    // Tạo danh sách đỉnh kèm bậc (degree)
+    let nodes = orders.map((o, i) => {
+        let degree = 0;
+        matrix[i].forEach(val => degree += val);
+        return { id: i, degree: degree, color: null }; // id là index (0,1,2...)
+    });
+
+    // Sắp xếp giảm dần theo bậc
+    let sortedNodes = [...nodes].sort((a, b) => b.degree - a.degree);
+    
+    let colorIndex = 0;
+    let coloredCount = 0;
+
+    // Vòng lặp tô màu
+    while (coloredCount < nodes.length) {
+        // Đánh dấu bắt đầu màu mới (để Skip biết đường dừng lại)
+        steps.push({ type: 'NEW_ROUND', colorIndex: colorIndex });
+
+        let uncolored = sortedNodes.filter(n => n.color === null);
+        if (uncolored.length === 0) break;
+
+        // Danh sách các đỉnh đã tô trong lượt màu này (để kiểm tra xung đột)
+        let currentGroup = [];
+
+        for (let node of uncolored) {
+            // HÀNH ĐỘNG 1: Đang xét (Nhấp nháy)
+            steps.push({ type: 'CHECKING', nodeId: node.id, colorIndex: colorIndex });
+
+            // Kiểm tra xung đột với các đỉnh đã tô trong nhóm hiện tại
+            let isConflict = currentGroup.some(doneId => matrix[node.id][doneId] === 1);
+
+            if (!isConflict) {
+                // HÀNH ĐỘNG 2: Hợp lệ -> Tô màu
+                node.color = colorIndex;
+                currentGroup.push(node.id);
+                coloredCount++;
+                steps.push({ type: 'COLOR_IT', nodeId: node.id, colorIndex: colorIndex });
+            } else {
+                // HÀNH ĐỘNG 3: Xung đột -> Trả về cũ
+                steps.push({ type: 'REVERT', nodeId: node.id, colorIndex: colorIndex });
+            }
+        }
+        colorIndex++;
+    }
+    return steps;
+}
+
+// 2️⃣ HÀM THỰC THI VISUAL (ACTOR)
+// Thực hiện 1 bước dựa trên kịch bản
+function executeStep() {
+    if (stepIndex >= stepScenario.length) {
+        alert("✅ Đã hoàn thành mô phỏng!");
+        if (stepTimer) clearInterval(stepTimer);
+        nextBtn.disabled = true;
+        skipBtn.disabled = true;
+        return;
+    }
+
+    const step = stepScenario[stepIndex];
+    
+    /* --- [CHÈN ĐOẠN NÀY VÀO ĐÂY] --- */
+    // 1. Cập nhật chữ "B1, B2..."
+    if(stepCount && step.colorIndex !== undefined) stepCount.innerText = `Bước ${step.colorIndex + 1}`;
+    
+    // 2. Cập nhật Ô Màu (Nếu bước đó có thông tin màu)
+    if(stepColorBox && step.colorIndex !== undefined) {
+        const pal = COLOR_PALETTE[step.colorIndex % COLOR_PALETTE.length];
+        stepColorBox.style.backgroundColor = pal.bg;
+        stepColorBox.title = `Bước ${step.colorIndex + 1}: Đang xếp ${pal.name}`;
+    }
+    /* -------------------------------- */
+
+    // Tìm node trên màn hình D3 (dựa vào _index)
+    const d3Node = d3.selectAll("circle").filter(d => d._index === step.nodeId);
+
+    switch (step.type) {
+        case 'CHECKING':
+            d3Node.transition().duration(200)
+                .attr("fill", "#bdc3c7").attr("r", 28).attr("stroke", "#7f8c8d");
+            break;
+
+        case 'COLOR_IT':
+            const c = COLOR_PALETTE[step.colorIndex % COLOR_PALETTE.length];
+            d3Node.transition().duration(400)
+                .attr("fill", c.bg).attr("stroke", "#fff").attr("r", 25);
+            break;
+
+        case 'REVERT':
+            d3Node.transition().duration(200)
+                .attr("fill", "#2f80ed").attr("stroke", "#1c4fa1").attr("r", 20);
+            break;
+    }
+    stepIndex++;
+}
+
+// 3️⃣ BỘ ĐIỀU KHIỂN (CONTROLLERS)
+
+// Nút Bật/Tắt chế độ Step
+stepByStepBtn.addEventListener('click', () => {
+    if (!appState.adjacencyMatrix) {
+        alert("⚠️ Chưa có đồ thị! Hãy bấm 'Build Graph' trước.");
+        return;
+    }
+
+    appState.isStepMode = !appState.isStepMode;
+
+    if (appState.isStepMode) {
+        // --- VÀO CHẾ ĐỘ ---
+        stepByStepBtn.textContent = '⏹️ Thoát Step Mode';
+        simControls.classList.add('active'); // Hiện nút Next/Skip
+
+        // 🔥 LỆNH QUAN TRỌNG NHẤT: BẬT THANH TRẠNG THÁI LÊN 🔥
+        if(stepStatus) stepStatus.style.display = 'flex';
+        
+        // 1. Reset toàn bộ màu về mặc định
+        d3.selectAll("circle")
+            .attr("fill", "#2f80ed")
+            .attr("stroke", "#1c4fa1")
+            .attr("r", 20);
+
+        // 2. Sinh kịch bản
+        stepScenario = generateWelshPowellSteps(appState.adjacencyMatrix, appState.orders);
+        stepIndex = 0;
+
+        // Reset chữ và màu về ban đầu
+        if(stepCount) stepCount.innerText = "Bước 1";
+        if(stepColorBox) {
+            const firstColor = COLOR_PALETTE[0];
+            stepColorBox.style.backgroundColor = firstColor.bg;
+            stepColorBox.title = "Chuẩn bị: " + firstColor.name;
+        }
+        
+        // 3. Mở khóa nút
+        nextBtn.disabled = false;
+        skipBtn.disabled = false;
+
+        const totalVehicles = stepScenario.filter(s => s.type === 'NEW_ROUND').length;
+        alert(`🎖️ Đã vào chế độ Step Mode.\nTổng cộng sẽ có: ${totalVehicles} Bước chính (tương ứng ${totalVehicles} Xe).\nNhấn NEXT để bắt đầu.`);
+
+    } else {
+        // --- THOÁT CHẾ ĐỘ ---
+        stepByStepBtn.textContent = '⏯️ Step-by-Step';
+        simControls.classList.remove('active');
+        // 🔥 TẮT THANH TRẠNG THÁI ĐI 🔥
+        if(stepStatus) stepStatus.style.display = 'none';
+        if (stepTimer) clearInterval(stepTimer);
+
+    }
+});
+
+// Nút Next (Đi 1 bước)
+nextBtn.addEventListener('click', () => {
+    if (appState.isStepMode) {
+        executeStep();
+    }
+});
+
+// Nút Skip (Chạy nhanh hết lượt màu hiện tại)
+skipBtn.addEventListener('click', () => {
+    if (!appState.isStepMode) return;
+
+    // Khóa nút để tránh bấm loạn
+    skipBtn.disabled = true;
+    nextBtn.disabled = true;
+
+    // Chạy tự động tốc độ cao
+    stepTimer = setInterval(() => {
+        if (stepIndex >= stepScenario.length) {
+            clearInterval(stepTimer);
+            return;
+        }
+
+        const nextAction = stepScenario[stepIndex];
+        
+        // Nếu gặp tín hiệu 'NEW_ROUND' (Màu mới) và không phải bước đầu tiên -> Dừng lại
+        if (nextAction.type === 'NEW_ROUND' && stepIndex > 0) {
+            clearInterval(stepTimer);
+            skipBtn.disabled = false;
+            nextBtn.disabled = false;
+            // alert("Đã xong một lượt xe. Nhấn Next/Skip để tiếp tục.");
+        } else {
+            executeStep();
+        }
+    }, 50); // 50ms mỗi bước
+});
