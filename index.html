@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShipColor - Tối ưu hóa lộ trình giao hàng (Graph)</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script src="models.js"></script>
+    <script src="main.js" defer></script>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+</head>
+
+<body>
+    <header class="header">
+        <h1>🚚 ShipColor - Tối ưu hóa lịch trình giao hàng (Graph)</h1>
+        <p>Đỉnh = đơn hàng. Nếu hai đơn xung đột thì nối cạnh giữa chúng.</p>
+    </header>
+
+    <div class="toolbar">
+        <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.csv">
+        <label for="fileInput" class="file-label">📁 Upload Data (Excel)</label>
+        <button class="btn btn-secondary" id="buildGraphBtn">🔨 Build Graph</button>
+        <button class="btn btn-success" id="runColoringBtn">🎨 Run Coloring</button>
+        <button class="btn btn-primary" id="stepByStepBtn">⏯️ Step-by-Step</button>
+        <button class="btn btn-export" id="exportBtn">💾 Export</button>
+    </div>
+
+    <div class="container">
+        <div class="visualization-section">
+            <div class="viz-header">
+                <h2>Visualization (GraphView)</h2>
+            </div>
+
+            <div class="viz-canvas" id="vizCanvas">
+                <div class="viz-placeholder">
+                    <div style="font-size: 4rem;">📍</div>
+                    <p>Tải dữ liệu và nhấn "Build Graph" để hiển thị đồ thị xung đột.</p>
+                </div>
+            </div>
+
+            <div class="simulation-controls" id="simControls">
+                <div id="stepStatus" style="display:none; align-items: center; margin-right: 15px; padding-right: 15px; border-right: 1px solid #ccc;">
+                    <span id="stepCount" style="font-weight: bold; margin-right: 8px; color: #333;">B0</span>
+                    <div id="stepColorBox" style="width: 24px; height: 24px; background: #ccc; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.3); border-radius: 4px;" title="Màu đang xét"></div>
+            </div>
+                <button class="control-btn" id="nextBtn">▶️ NEXT (Xét đỉnh)</button>
+                <button class="control-btn" id="skipBtn">⏩ SKIP (Xong lượt màu)</button>
+            </div>
+        </div>
+
+        <div class="info-panels">
+            <div class="panel">
+                <div class="panel-header">⚠️ Xung đột phát hiện</div>
+                <div class="panel-content" id="conflictsPanel">
+                    <div class="empty-state">Chưa có dữ liệu xung đột</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">✅ Kết quả</div>
+                <div class="panel-content" id="resultsPanel">
+                    <div class="empty-state">Chưa chạy thuật toán</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">📋 Chi tiết đơn (click node)</div>
+                <div class="panel-content" id="detailsPanel">
+                    <div class="empty-state">Chưa có đơn được chọn</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="orderTooltip" style="
+    position: absolute;
+    display: none;
+    background: #ffffff;
+    border: 2px solid #2f80ed;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+    z-index: 9999;
+    max-width: 260px;
+">
+    </div>
+
+</body>
+
+</html>
