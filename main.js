@@ -698,9 +698,139 @@ buildGraphBtn.addEventListener('click', () => {
     console.log("Ma trận kề đã tạo:", appState.adjacencyMatrix);
 });
 
+/* =====================================================
+   📊 CHỨC NĂNG EXPORT EXCEL (2 SHEETS)
+   ===================================================== */
 exportBtn.addEventListener('click', () => {
-    console.log('Exporting results...');
-    alert('Xuất kết quả ra file Excel/PDF\n(Chức năng đang được phát triển)');
+    // 1. Kiểm tra xem đã có kết quả tô màu chưa
+    if (!appState.coloring || !appState.orders) {
+        alert('⚠️ Vui lòng chạy "Run Coloring" trước khi xuất dữ liệu!');
+        return;
+    }
+
+    const { vertexColors, totalColors } = appState.coloring;
+    const orders = appState.orders;
+
+    // --- SHEET 1: TỔNG HỢP PHÂN BỔ THEO XE ---
+    const summaryData = [];
+    for (let c = 0; c < totalColors; c++) {
+        const group = vertexColors.filter(v => v.color === c);
+        const palette = COLOR_PALETTE[c] || { name: `Xe ${c + 1}` };
+        
+        const orderIds = group.map(v => orders[v.id].tenDonHang).join(', ');
+
+        summaryData.push({
+            "Xe": palette.name,
+            "Số đơn": group.length,
+            "Danh sách mã đơn": orderIds
+        });
+    }
+
+    // --- SHEET 2: DANH SÁCH ĐƠN CHI TIẾT ---
+    const detailData = orders.map((order, index) => {
+        const colorInfo = vertexColors.find(v => v.id === index);
+        const vehicleName = colorInfo !== undefined 
+            ? (COLOR_PALETTE[colorInfo.color % COLOR_PALETTE.length]?.name || `Xe ${colorInfo.color + 1}`)
+            : 'Chưa phân bổ';
+
+        return {
+            "Mã đơn (Order ID)": order.tenDonHang,
+            "Địa chỉ": order.diaChi,
+            "Thời gian yêu cầu": formatTime(order.thoiGianGiao).replace(/<\/?[^>]+(>|$)/g, ""),
+            "Nhóm": extractDistrict(order.diaChi) || "N/A",
+            "Xe được phân": vehicleName
+        };
+    });
+
+    try {
+        // Tạo workbook
+        const wb = XLSX.utils.book_new();
+
+        const ws1 = XLSX.utils.json_to_sheet(summaryData);
+        const ws2 = XLSX.utils.json_to_sheet(detailData);
+
+        // ======================================================
+        //                ⭐ THÊM TRANG TRÍ CHO ĐẸP ⭐
+        // ======================================================
+
+        // Auto-fit chiều rộng
+        function autofitColumns(ws, jsonData) {
+            const colWidths = Object.keys(jsonData[0]).map(key => ({
+                wch: Math.max(
+                    key.length,
+                    ...jsonData.map(r => (r[key] ? r[key].toString().length : 0))
+                ) + 2
+            }));
+            ws['!cols'] = colWidths;
+        }
+
+        // Style header
+        function styleHeader(ws) {
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let C = range.s.c; C <= range.e.c; C++) {
+                const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C });
+                if (ws[cellAddr]) {
+                    ws[cellAddr].s = {
+                        font: { bold: true, color: { rgb: "FFFFFF" } },
+                        fill: { fgColor: { rgb: "4F81BD" } },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        border: {
+                            top:    { style: "thin", color: { rgb: "000000" } },
+                            left:   { style: "thin", color: { rgb: "000000" } },
+                            right:  { style: "thin", color: { rgb: "000000" } },
+                            bottom: { style: "thin", color: { rgb: "000000" } }
+                        }
+                    };
+                }
+            }
+        }
+
+        // Style body
+        function styleBody(ws) {
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let R = 1; R <= range.e.r; R++) {
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (ws[cellAddr]) {
+                        ws[cellAddr].s = {
+                            alignment: { vertical: "center", wrapText: true },
+                            border: {
+                                top:    { style: "thin", color: { rgb: "CCCCCC" } },
+                                left:   { style: "thin", color: { rgb: "CCCCCC" } },
+                                right:  { style: "thin", color: { rgb: "CCCCCC" } },
+                                bottom: { style: "thin", color: { rgb: "CCCCCC" } }
+                            }
+                        };
+                    }
+                }
+            }
+        }
+
+        // Áp dụng vào sheet 1 + 2
+        autofitColumns(ws1, summaryData);
+        autofitColumns(ws2, detailData);
+
+        styleHeader(ws1);
+        styleHeader(ws2);
+
+        styleBody(ws1);
+        styleBody(ws2);
+
+        // ======================================================
+        //                 HOÀN TẤT EXPORT
+        // ======================================================
+
+        XLSX.utils.book_append_sheet(wb, ws1, "Tổng hợp phân bổ");
+        XLSX.utils.book_append_sheet(wb, ws2, "Danh sách đơn chi tiết");
+
+        const fileName = `Ket_Qua_Phan_Bo_Xe_${new Date().getTime()}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+        alert(`✅ Đã xuất file thành công: ${fileName}`);
+    } catch (error) {
+        console.error("Lỗi xuất Excel:", error);
+        alert("Có lỗi xảy ra khi tạo file Excel.");
+    }
 });
 
 tabButtons.forEach(btn => {
@@ -718,19 +848,69 @@ console.log('ShipColor Dashboard initialized');
 
 /* ==========================================================================
    PHẦN BỔ SUNG MỚI: THUẬT TOÁN WELSH-POWELL & RUN COLORING
-   (Dán tiếp vào cuối file main.js)
    ========================================================================== */
 
-// 1. BẢNG MÀU (Dùng để tô cho các xe khác nhau)
+// 1. BẢNG MÀU "NGHỆ THUẬT" (20 màu Modern UI - Vừa đẹp vừa tách biệt)
 const COLOR_PALETTE = [
-    { bg: '#FF5722', border: '#BF360C', name: 'Xe 1 (Đỏ)' },
-    { bg: '#FFC107', border: '#FF6F00', name: 'Xe 2 (Vàng)' },
-    { bg: '#4CAF50', border: '#1B5E20', name: 'Xe 3 (Xanh lá)' },
-    { bg: '#2196F3', border: '#0D47A1', name: 'Xe 4 (Xanh dương)' },
-    { bg: '#9C27B0', border: '#4A148C', name: 'Xe 5 (Tím)' },
-    { bg: '#00BCD4', border: '#006064', name: 'Xe 6 (Cyan)' },
-    { bg: '#795548', border: '#3E2723', name: 'Xe 7 (Nâu)' },
-    { bg: '#607D8B', border: '#263238', name: 'Xe 8 (Xám)' }
+    // 1. Cam Hoàng Hôn (Rực rỡ mở màn)
+    { bg: '#FF6B6B', border: '#C92A2A', name: 'Xe 1 (Sunset Orange)' },
+    
+    // 2. Xanh Biển Sâu (Tương phản mạnh với cam)
+    { bg: '#4D96FF', border: '#1A5FBC', name: 'Xe 2 (Ocean Blue)' },
+    
+    // 3. Xanh Ngọc Lục Bảo (Mát mắt, sang trọng)
+    { bg: '#06D6A0', border: '#048A66', name: 'Xe 3 (Emerald)' },
+    
+    // 4. Vàng Mật Ong (Sáng nhưng không chói, dễ đọc chữ)
+    { bg: '#FFD166', border: '#B8860B', name: 'Xe 4 (Honey Yellow)' },
+    
+    // 5. Tím Vô Cực (Huyền bí, đậm đà)
+    { bg: '#7209B7', border: '#48007A', name: 'Xe 5 (Deep Violet)' },
+    
+    // 6. Hồng San Hô (Nữ tính nhưng hiện đại)
+    { bg: '#EF476F', border: '#AD1D40', name: 'Xe 6 (Coral Pink)' },
+    
+    // 7. Xanh Lơ (Tươi mới)
+    { bg: '#118AB2', border: '#073B4C', name: 'Xe 7 (Cerulean)' },
+    
+    // 8. Đỏ Rượu Vang (Trầm ấm, quyền lực)
+    { bg: '#9D0208', border: '#370617', name: 'Xe 8 (Wine Red)' },
+    
+    // 9. Xanh Lá Mạ (Năng động, nổi bật trên nền tối)
+    { bg: '#80B918', border: '#4F772D', name: 'Xe 9 (Spring Green)' },
+    
+    // 10. Nâu Coffee (Trung tính, ấm áp)
+    { bg: '#6F4E37', border: '#3E2723', name: 'Xe 10 (Coffee)' },
+    
+    // 11. Xanh Cổ Vịt (Teal - Màu "hot trend")
+    { bg: '#2A9D8F', border: '#1D6D63', name: 'Xe 11 (Teal)' },
+    
+    // 12. Tím Pastel (Nhẹ nhàng, mộng mơ)
+    { bg: '#B5179E', border: '#700B61', name: 'Xe 12 (Orchid)' },
+    
+    // 13. Cam Đất (Vintage)
+    { bg: '#E76F51', border: '#9A3A23', name: 'Xe 13 (Burnt Sienna)' },
+    
+    // 14. Xanh Navy (Mạnh mẽ, nghiêm túc)
+    { bg: '#264653', border: '#101D24', name: 'Xe 14 (Classic Navy)' },
+    
+    // 15. Vàng Chanh (Neon, rất nổi bật)
+    { bg: '#D4D700', border: '#828500', name: 'Xe 15 (Acid Lime)' },
+    
+    // 16. Xám Ánh Xanh (Hiện đại, công nghệ)
+    { bg: '#6C757D', border: '#343A40', name: 'Xe 16 (Cool Gray)' },
+    
+    // 17. Hồng Fuchsia (Rất đậm và rực)
+    { bg: '#F72585', border: '#A3004C', name: 'Xe 17 (Fuchsia)' },
+    
+    // 18. Xanh Bạc Hà (Mint - Dịu mắt)
+    { bg: '#4CC9F0', border: '#2186C4', name: 'Xe 18 (Sky Blue)' },
+    
+    // 19. Màu Olive (Độc đáo, ít đụng hàng)
+    { bg: '#556B2F', border: '#283314', name: 'Xe 19 (Dark Olive)' },
+    
+    // 20. Đen Than Chì (Kết thúc mạnh mẽ)
+    { bg: '#212529', border: '#000000', name: 'Xe 20 (Charcoal)' }
 ];
 
 // 2. THUẬT TOÁN WELSH-POWELL (CORE LOGIC)
